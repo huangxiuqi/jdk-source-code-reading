@@ -427,6 +427,8 @@ public class HashMap<K,V> extends AbstractMap<K,V>
                     loadFactor);
 
         // 初始化加载因子和扩容阈值
+        // 扩容阈值会设置为大于等于initialCapacity的最小的2的幂，因为第一
+        // 次插入元素时会将桶数组的大小设为此值，所以其必须为2的幂
         this.loadFactor = loadFactor;
         this.threshold = tableSizeFor(initialCapacity);
     }
@@ -450,20 +452,23 @@ public class HashMap<K,V> extends AbstractMap<K,V>
      */
     public HashMap(Map<? extends K, ? extends V> m) {
         this.loadFactor = DEFAULT_LOAD_FACTOR;
+
+        // 将传入Map的所有元素插入到HashMap中
         putMapEntries(m, false);
     }
 
     /**
-     * Implements Map.putAll and Map constructor.
-     *
-     * @param m the map
-     * @param evict false when initially constructing this map, else
-     * true (relayed to method afterNodeInsertion).
+     * 将传入的Map中的所有元素插入到HashMap中
      */
     final void putMapEntries(Map<? extends K, ? extends V> m, boolean evict) {
         int s = m.size();
+
+        // 若传入Map不为空
         if (s > 0) {
-            if (table == null) { // pre-size
+
+            // 如果是构造函数调用的，则根据传入Map的大小计算初始化容量
+            // 如果桶数组已初始化且传入Map的大小超过了扩容阈值，则先进行一次扩容操作
+            if (table == null) {
                 float ft = ((float)s / loadFactor) + 1.0F;
                 int t = ((ft < (float)MAXIMUM_CAPACITY) ?
                         (int)ft : MAXIMUM_CAPACITY);
@@ -472,6 +477,8 @@ public class HashMap<K,V> extends AbstractMap<K,V>
             }
             else if (s > threshold)
                 resize();
+
+            // 遍历传入Map中的所有元素，将其依次插入
             for (Map.Entry<? extends K, ? extends V> e : m.entrySet()) {
                 K key = e.getKey();
                 V value = e.getValue();
@@ -1130,6 +1137,8 @@ public class HashMap<K,V> extends AbstractMap<K,V>
     @Override
     public boolean replace(K key, V oldValue, V newValue) {
         Node<K,V> e; V v;
+
+        // 若key对应的节点存在并且值等于传入的oldValue，那么对值进行更新
         if ((e = getNode(hash(key), key)) != null &&
                 ((v = e.value) == oldValue || (v != null && v.equals(oldValue)))) {
             e.value = newValue;
@@ -1145,6 +1154,8 @@ public class HashMap<K,V> extends AbstractMap<K,V>
     @Override
     public V replace(K key, V value) {
         Node<K,V> e;
+
+        // 如果key对应的节点存在，则对值进行更新
         if ((e = getNode(hash(key), key)) != null) {
             V oldValue = e.value;
             e.value = value;
@@ -1154,6 +1165,9 @@ public class HashMap<K,V> extends AbstractMap<K,V>
         return null;
     }
 
+    /**
+     * 对指定key的值进行重新计算，如果不存在这个 key，则添加到 HashMap中
+     */
     @Override
     public V computeIfAbsent(K key,
                              Function<? super K, ? extends V> mappingFunction) {
@@ -1164,9 +1178,13 @@ public class HashMap<K,V> extends AbstractMap<K,V>
         int binCount = 0;
         TreeNode<K,V> t = null;
         Node<K,V> old = null;
+
+        // 如果容量大于扩容阈值或桶还未初始化，则先进行扩容
         if (size > threshold || (tab = table) == null ||
                 (n = tab.length) == 0)
             n = (tab = resize()).length;
+
+        // 查找key对应的节点
         if ((first = tab[i = (n - 1) & hash]) != null) {
             if (first instanceof TreeNode)
                 old = (t = (TreeNode<K,V>)first).getTreeNode(hash, key);
@@ -1187,36 +1205,59 @@ public class HashMap<K,V> extends AbstractMap<K,V>
                 return oldValue;
             }
         }
+
+        // 计算新的值
         V v = mappingFunction.apply(key);
+
         if (v == null) {
+            // 若计算后的值为null则不进行任何操作
             return null;
         } else if (old != null) {
+            // 若key之前存在，则对其值进行更新
             old.value = v;
             afterNodeAccess(old);
             return v;
         }
         else if (t != null)
+            // 若key之前不存在，并且此处已经树化，则交由红黑树插入新的键值对
             t.putTreeVal(this, tab, hash, key, v);
         else {
+            // 创建一个新节点插入链表中
             tab[i] = newNode(hash, key, v, first);
+
+            // 若链表元素个数超过树化阈值则对其进行树化
             if (binCount >= TREEIFY_THRESHOLD - 1)
                 treeifyBin(tab, hash);
         }
         ++modCount;
+
+        // 元素个数加一
         ++size;
         afterNodeInsertion(true);
+
+        // 返回计算后的新值
         return v;
     }
 
+    /**
+     * 若给定的key存在于HashMap中则对其值进行重新计算
+     */
     public V computeIfPresent(K key,
                               BiFunction<? super K, ? super V, ? extends V> remappingFunction) {
         if (remappingFunction == null)
             throw new NullPointerException();
         Node<K,V> e; V oldValue;
         int hash = hash(key);
+
+        // 根据key查找值不为空的节点，
         if ((e = getNode(hash, key)) != null &&
                 (oldValue = e.value) != null) {
+
+            // 重新计算值
             V v = remappingFunction.apply(key, oldValue);
+
+            // 若新值不为null，则进行更新
+            // 若新值为null，则删除此节点
             if (v != null) {
                 e.value = v;
                 afterNodeAccess(e);
@@ -1228,6 +1269,9 @@ public class HashMap<K,V> extends AbstractMap<K,V>
         return null;
     }
 
+    /**
+     * 对指定key的值进行重新计算
+     */
     @Override
     public V compute(K key,
                      BiFunction<? super K, ? super V, ? extends V> remappingFunction) {
@@ -1238,9 +1282,13 @@ public class HashMap<K,V> extends AbstractMap<K,V>
         int binCount = 0;
         TreeNode<K,V> t = null;
         Node<K,V> old = null;
+
+        // 如果容量大于扩容阈值或桶还未初始化，则先进行扩容
         if (size > threshold || (tab = table) == null ||
                 (n = tab.length) == 0)
             n = (tab = resize()).length;
+
+        // 查找key对应的节点
         if ((first = tab[i = (n - 1) & hash]) != null) {
             if (first instanceof TreeNode)
                 old = (t = (TreeNode<K,V>)first).getTreeNode(hash, key);
@@ -1256,9 +1304,14 @@ public class HashMap<K,V> extends AbstractMap<K,V>
                 } while ((e = e.next) != null);
             }
         }
+
+        // 计算新的值
         V oldValue = (old == null) ? null : old.value;
         V v = remappingFunction.apply(key, oldValue);
+
         if (old != null) {
+            // 若之前key已存在且计算得到的新值不为null，则进行更新操作
+            // 否则删除此节点
             if (v != null) {
                 old.value = v;
                 afterNodeAccess(old);
@@ -1267,20 +1320,31 @@ public class HashMap<K,V> extends AbstractMap<K,V>
                 removeNode(hash, key, null, false, true);
         }
         else if (v != null) {
+            // 若key之前不存在且计算得到的新值不为null，则进行插入操作
             if (t != null)
+                // 此处已树化，交由红黑树处理
                 t.putTreeVal(this, tab, hash, key, v);
             else {
+                // 创建新的节点插入链表
                 tab[i] = newNode(hash, key, v, first);
+
+                // 若链表中的元素个数超过树化阈值，进行树化操作
                 if (binCount >= TREEIFY_THRESHOLD - 1)
                     treeifyBin(tab, hash);
             }
             ++modCount;
+
+            // 元素个数加一
             ++size;
             afterNodeInsertion(true);
         }
         return v;
     }
 
+    /**
+     * 先判断指定的 key 是否存在，如果存在，则使用remappingFunction计算更新新的值
+     * 若不存在，则将key,value插入HashMap
+     */
     @Override
     public V merge(K key, V value,
                    BiFunction<? super V, ? super V, ? extends V> remappingFunction) {
@@ -1293,9 +1357,13 @@ public class HashMap<K,V> extends AbstractMap<K,V>
         int binCount = 0;
         TreeNode<K,V> t = null;
         Node<K,V> old = null;
+
+        // 如果容量大于扩容阈值或桶还未初始化，则先进行扩容
         if (size > threshold || (tab = table) == null ||
                 (n = tab.length) == 0)
             n = (tab = resize()).length;
+
+        // 查找key对应的节点
         if ((first = tab[i = (n - 1) & hash]) != null) {
             if (first instanceof TreeNode)
                 old = (t = (TreeNode<K,V>)first).getTreeNode(hash, key);
@@ -1311,12 +1379,19 @@ public class HashMap<K,V> extends AbstractMap<K,V>
                 } while ((e = e.next) != null);
             }
         }
+
+
         if (old != null) {
+            // 若key之前存在
             V v;
             if (old.value != null)
+                // 旧值不为null，则交由重新映射函数计算新的值
                 v = remappingFunction.apply(old.value, value);
             else
+                // 旧值为null，则将其更新为value
                 v = value;
+
+            // 如果新的值不为空则进行更新，否则删除这个key
             if (v != null) {
                 old.value = v;
                 afterNodeAccess(old);
@@ -1325,15 +1400,23 @@ public class HashMap<K,V> extends AbstractMap<K,V>
                 removeNode(hash, key, null, false, true);
             return v;
         }
+
+        // 如果key之前不存在且value参数不为null，则将key，value插入HashMap
         if (value != null) {
             if (t != null)
+                // 已经树化，交由红黑树处理
                 t.putTreeVal(this, tab, hash, key, value);
             else {
+                // 创建新的节点插入链表
                 tab[i] = newNode(hash, key, value, first);
+
+                // 若链表元素个数超过树化阈值，进行树化操作
                 if (binCount >= TREEIFY_THRESHOLD - 1)
                     treeifyBin(tab, hash);
             }
             ++modCount;
+
+            // 元素个数加一
             ++size;
             afterNodeInsertion(true);
         }
@@ -1374,7 +1457,9 @@ public class HashMap<K,V> extends AbstractMap<K,V>
             throw new NullPointerException();
         if (size > 0 && (tab = table) != null) {
             int mc = modCount;
+            // 遍历桶数组
             for (int i = 0; i < tab.length; ++i) {
+                // 遍历节点
                 for (Node<K,V> e = tab[i]; e != null; e = e.next) {
                     e.value = function.apply(e.key, e.value);
                 }
