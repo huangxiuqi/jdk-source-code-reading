@@ -299,20 +299,28 @@ public class WeakHashMap<K,V>
             synchronized (queue) {
                 @SuppressWarnings("unchecked")
                     Entry<K,V> e = (Entry<K,V>) x;
+
+                // 找到此节点对应的索引
                 int i = indexFor(e.hash, table.length);
 
                 Entry<K,V> prev = table[i];
                 Entry<K,V> p = prev;
+
+                // 遍历链表
                 while (p != null) {
+                    // 保存后继节点
                     Entry<K,V> next = p.next;
+
+                    // 找到key相同的节点
                     if (p == e) {
                         if (prev == e)
+                            // 如果是链表头，将链表头指针指向下一个节点
                             table[i] = next;
                         else
+                            // 将前驱节点和后继节点链接起来，删除当前节点
                             prev.next = next;
-                        // Must not null out e.next;
-                        // stale entries may be in use by a HashIterator
-                        e.value = null; // Help GC
+
+                        e.value = null;
                         size--;
                         break;
                     }
@@ -458,7 +466,7 @@ public class WeakHashMap<K,V>
             // 如果当前元素个数不小于(threshold / 2)，重新计算threshold
             threshold = (int)(newCapacity * loadFactor);
         } else {
-            // 回收了大量元素，导致元素个数低于(threshold / 2)，则回复旧桶
+            // 如果回收了元素之后，元素个数低于(threshold / 2)，则回复旧桶
             expungeStaleEntries();
             transfer(newTable, oldTable);
             table = oldTable;
@@ -495,12 +503,7 @@ public class WeakHashMap<K,V>
     }
 
     /**
-     * Copies all of the mappings from the specified map to this map.
-     * These mappings will replace any mappings that this map had for any
-     * of the keys currently in the specified map.
-     *
-     * @param m mappings to be stored in this map.
-     * @throws  NullPointerException if the specified map is null.
+     * 将给定Map中的所有元素拷贝到WeakHashMap中
      */
     public void putAll(Map<? extends K, ? extends V> m) {
 
@@ -509,66 +512,64 @@ public class WeakHashMap<K,V>
         if (numKeysToBeAdded == 0)
             return;
 
-        /*
-         * Expand the map if the map if the number of mappings to be added
-         * is greater than or equal to threshold.  This is conservative; the
-         * obvious condition is (m.size() + size) >= threshold, but this
-         * condition could result in a map with twice the appropriate capacity,
-         * if the keys to be added overlap with the keys already in this map.
-         * By using the conservative calculation, we subject ourself
-         * to at most one extra resize.
-         */
+        // 若传入map大小超过扩容阈值，对桶进行扩容
         if (numKeysToBeAdded > threshold) {
+
+            // 计算新容量
             int targetCapacity = (int)(numKeysToBeAdded / loadFactor + 1);
+
+            // 新容量不能超过最大容量
             if (targetCapacity > MAXIMUM_CAPACITY)
                 targetCapacity = MAXIMUM_CAPACITY;
             int newCapacity = table.length;
+
+            // 保证新容量为2的幂
             while (newCapacity < targetCapacity)
                 newCapacity <<= 1;
+
+            // 若新容量大于当前容量，进行扩容
             if (newCapacity > table.length)
                 resize(newCapacity);
         }
 
+        // 遍历Map的元素，将其添加到WeakHashMap
         for (Map.Entry<? extends K, ? extends V> e : m.entrySet())
             put(e.getKey(), e.getValue());
     }
 
     /**
-     * Removes the mapping for a key from this weak hash map if it is present.
-     * More formally, if this map contains a mapping from key <tt>k</tt> to
-     * value <tt>v</tt> such that <code>(key==null ?  k==null :
-     * key.equals(k))</code>, that mapping is removed.  (The map can contain
-     * at most one such mapping.)
-     *
-     * <p>Returns the value to which this map previously associated the key,
-     * or <tt>null</tt> if the map contained no mapping for the key.  A
-     * return value of <tt>null</tt> does not <i>necessarily</i> indicate
-     * that the map contained no mapping for the key; it's also possible
-     * that the map explicitly mapped the key to <tt>null</tt>.
-     *
-     * <p>The map will not contain a mapping for the specified key once the
-     * call returns.
-     *
-     * @param key key whose mapping is to be removed from the map
-     * @return the previous value associated with <tt>key</tt>, or
-     *         <tt>null</tt> if there was no mapping for <tt>key</tt>
+     * 删除给定的key
      */
     public V remove(Object key) {
+        // 若key为null，将其替换为NULL_KEY
         Object k = maskNull(key);
+        // 对key的hashCode进行扰动
         int h = hash(k);
+        // 清理已被回收的元素
         Entry<K,V>[] tab = getTable();
+        // 找到hash对应的索引
         int i = indexFor(h, tab.length);
         Entry<K,V> prev = tab[i];
         Entry<K,V> e = prev;
 
+        // 遍历链表
         while (e != null) {
+            // 保存后继节点
             Entry<K,V> next = e.next;
+
+            // 如果此节点key与给定key相同，则将其删除
             if (h == e.hash && eq(k, e.get())) {
+                // 修改次数加一
                 modCount++;
+
+                // 元素个数减一
                 size--;
+
                 if (prev == e)
+                    // 如果是头结点，则将链表头指向下一个节点
                     tab[i] = next;
                 else
+                    // 将前驱节点和后继节点链接起来，删除当前节点
                     prev.next = next;
                 return e.value;
             }
@@ -610,40 +611,39 @@ public class WeakHashMap<K,V>
     }
 
     /**
-     * Removes all of the mappings from this map.
-     * The map will be empty after this call returns.
+     * 清空Map
      */
     public void clear() {
-        // clear out ref queue. We don't need to expunge entries
-        // since table is getting cleared.
+        // 清空引用队列
         while (queue.poll() != null)
             ;
 
+        // 修改次数加一
         modCount++;
+
+        // 桶数组所有位置都置为null
         Arrays.fill(table, null);
+
+        // 元素个数置为0
         size = 0;
 
-        // Allocation of array may have caused GC, which may have caused
-        // additional entries to go stale.  Removing these entries from the
-        // reference queue will make them eligible for reclamation.
+        // 清空数组后可能有GC回收，再次清空引用队列
         while (queue.poll() != null)
             ;
     }
 
     /**
-     * Returns <tt>true</tt> if this map maps one or more keys to the
-     * specified value.
-     *
-     * @param value value whose presence in this map is to be tested
-     * @return <tt>true</tt> if this map maps one or more keys to the
-     *         specified value
+     * 检查Map是否包含指定value值
      */
     public boolean containsValue(Object value) {
+        // value为null，跳转至containsNullValue方法
         if (value==null)
             return containsNullValue();
 
         Entry<K,V>[] tab = getTable();
+        // 遍历桶数组
         for (int i = tab.length; i-- > 0;)
+            // 遍历链表
             for (Entry<K,V> e = tab[i]; e != null; e = e.next)
                 if (value.equals(e.value))
                     return true;
@@ -651,11 +651,13 @@ public class WeakHashMap<K,V>
     }
 
     /**
-     * Special-case code for containsValue with null argument
+     * 是否包含value为null的键值对
      */
     private boolean containsNullValue() {
         Entry<K,V>[] tab = getTable();
+        // 遍历桶数组
         for (int i = tab.length; i-- > 0;)
+            // 遍历链表
             for (Entry<K,V> e = tab[i]; e != null; e = e.next)
                 if (e.value==null)
                     return true;
@@ -663,8 +665,8 @@ public class WeakHashMap<K,V>
     }
 
     /**
-     * The entries in this hash table extend WeakReference, using its main ref
-     * field as the key.
+     * 储存元素的节点
+     * 继承自WeakReference，对key保存的是其弱引用
      */
     private static class Entry<K,V> extends WeakReference<Object> implements Map.Entry<K,V> {
         V value;
@@ -978,6 +980,9 @@ public class WeakHashMap<K,V>
         }
     }
 
+    /**
+     * 遍历所有元素
+     */
     @SuppressWarnings("unchecked")
     @Override
     public void forEach(BiConsumer<? super K, ? super V> action) {
@@ -985,9 +990,13 @@ public class WeakHashMap<K,V>
         int expectedModCount = modCount;
 
         Entry<K, V>[] tab = getTable();
+        // 遍历桶数组
         for (Entry<K, V> entry : tab) {
+            // 遍历链表
             while (entry != null) {
                 Object key = entry.get();
+
+                // 若key不为null，传给action处理
                 if (key != null) {
                     action.accept((K)WeakHashMap.unmaskNull(key), entry.value);
                 }
@@ -1000,6 +1009,10 @@ public class WeakHashMap<K,V>
         }
     }
 
+    /**
+     * 遍历所有元素，根据给定的function替换值
+     * @param function
+     */
     @SuppressWarnings("unchecked")
     @Override
     public void replaceAll(BiFunction<? super K, ? super V, ? extends V> function) {
@@ -1007,9 +1020,12 @@ public class WeakHashMap<K,V>
         int expectedModCount = modCount;
 
         Entry<K, V>[] tab = getTable();;
+        // 遍历桶数组
         for (Entry<K, V> entry : tab) {
+            // 遍历链表
             while (entry != null) {
                 Object key = entry.get();
+                // 若key不为null，传递给function，将返回的新值赋给value
                 if (key != null) {
                     entry.value = function.apply((K)WeakHashMap.unmaskNull(key), entry.value);
                 }
