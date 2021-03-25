@@ -160,6 +160,8 @@ public class IdentityHashMap<K,V>
 
     /**
      * 桶数组，大小必须是2的幂
+     * 键和值都放在数组中，例如键映射到索引i处，则值
+     * 会放在索引i+1处
      */
     transient Object[] table;
 
@@ -225,7 +227,8 @@ public class IdentityHashMap<K,V>
     }
 
     /**
-     * 根据传入容量初始化数组，大小为传入容量的2倍
+     * 根据传入容量初始化数组
+     * 因为键和值都放在数组中，所以数组大小是容量的两倍
      */
     private void init(int initCapacity) {
         table = new Object[2 * initCapacity];
@@ -255,7 +258,7 @@ public class IdentityHashMap<K,V>
     }
 
     /**
-     * 计算hash对应桶数组的索引
+     * 计算hash映射到桶数组的索引
      */
     private static int hash(Object x, int length) {
         // 获取对象的原始hashCode，此hashCode不受重写的hashCode()方法影响
@@ -263,64 +266,58 @@ public class IdentityHashMap<K,V>
         int h = System.identityHashCode(x);
 
         // 计算索引
-        // Multiply by -127, and left-shift to use least bit as part of hash
+        // 先将hashCode乘以-254，然后取对length的模
+        // 不清楚为什么取了-254这个值
+        // (h << 1) - (h << 8) = (h * 2) - (h * 2**8) = 2h - 256h = -254h
+        // -254是偶数，乘完后结果也一定是个偶数，可以保证映射到数组的偶数位
+        // 数组的偶数位保存key，奇数位保存value
         return ((h << 1) - (h << 8)) & (length - 1);
     }
 
     /**
-     * Circularly traverses table of size len.
+     * 找到下一个key的位置，超过最大索引重置为0
      */
     private static int nextKeyIndex(int i, int len) {
         return (i + 2 < len ? i + 2 : 0);
     }
 
     /**
-     * Returns the value to which the specified key is mapped,
-     * or {@code null} if this map contains no mapping for the key.
-     *
-     * <p>More formally, if this map contains a mapping from a key
-     * {@code k} to a value {@code v} such that {@code (key == k)},
-     * then this method returns {@code v}; otherwise it returns
-     * {@code null}.  (There can be at most one such mapping.)
-     *
-     * <p>A return value of {@code null} does not <i>necessarily</i>
-     * indicate that the map contains no mapping for the key; it's also
-     * possible that the map explicitly maps the key to {@code null}.
-     * The {@link #containsKey containsKey} operation may be used to
-     * distinguish these two cases.
-     *
-     * @see #put(Object, Object)
+     * 返回key对应的值，若key不存在，返回null
      */
     @SuppressWarnings("unchecked")
     public V get(Object key) {
+        // 若key为null，替换为NULL_KEY
         Object k = maskNull(key);
         Object[] tab = table;
         int len = tab.length;
+        // 计算key映射到数组的索引
         int i = hash(k, len);
+
+        // 线性探测
         while (true) {
             Object item = tab[i];
             if (item == k)
+                // 找到与key引用相等的键，返回对应的值
                 return (V) tab[i + 1];
             if (item == null)
+                // 找不到返回null
                 return null;
             i = nextKeyIndex(i, len);
         }
     }
 
     /**
-     * Tests whether the specified object reference is a key in this identity
-     * hash map.
-     *
-     * @param   key   possible key
-     * @return  <code>true</code> if the specified object reference is a key
-     *          in this map
-     * @see     #containsValue(Object)
+     * 查询是否包含给定的key
      */
     public boolean containsKey(Object key) {
+
+        // 计算key映射到数组的索引
         Object k = maskNull(key);
         Object[] tab = table;
         int len = tab.length;
         int i = hash(k, len);
+
+        // 线性探测
         while (true) {
             Object item = tab[i];
             if (item == k)
@@ -332,17 +329,15 @@ public class IdentityHashMap<K,V>
     }
 
     /**
-     * Tests whether the specified object reference is a value in this identity
-     * hash map.
-     *
-     * @param value value whose presence in this map is to be tested
-     * @return <tt>true</tt> if this map maps one or more keys to the
-     *         specified object reference
-     * @see     #containsKey(Object)
+     * 查询是否包含给定的value
      */
     public boolean containsValue(Object value) {
         Object[] tab = table;
+
+        // 遍历数组储存值的位置
         for (int i = 1; i < tab.length; i += 2)
+
+            // 若找到了相同的value，且对应的key不为null，则返回true
             if (tab[i] == value && tab[i - 1] != null)
                 return true;
 
@@ -350,21 +345,21 @@ public class IdentityHashMap<K,V>
     }
 
     /**
-     * Tests if the specified key-value mapping is in the map.
-     *
-     * @param   key   possible key
-     * @param   value possible value
-     * @return  <code>true</code> if and only if the specified key-value
-     *          mapping is in the map
+     * 查询是否包含指定的键值对
      */
     private boolean containsMapping(Object key, Object value) {
+
+        // 计算key映射到数组的索引
         Object k = maskNull(key);
         Object[] tab = table;
         int len = tab.length;
         int i = hash(k, len);
+
+        // 线性探测
         while (true) {
             Object item = tab[i];
             if (item == k)
+                // 找到引用相同的key，判断其value是否引用相同
                 return tab[i + 1] == value;
             if (item == null)
                 return false;
@@ -373,19 +368,8 @@ public class IdentityHashMap<K,V>
     }
 
     /**
-     * Associates the specified value with the specified key in this identity
-     * hash map.  If the map previously contained a mapping for the key, the
-     * old value is replaced.
-     *
-     * @param key the key with which the specified value is to be associated
-     * @param value the value to be associated with the specified key
-     * @return the previous value associated with <tt>key</tt>, or
-     *         <tt>null</tt> if there was no mapping for <tt>key</tt>.
-     *         (A <tt>null</tt> return can also indicate that the map
-     *         previously associated <tt>null</tt> with <tt>key</tt>.)
-     * @see     Object#equals(Object)
-     * @see     #get(Object)
-     * @see     #containsKey(Object)
+     * 将键值对插入Map，若key之前存在，则更新其值
+     * 比较的是key的引用，使用==而不是equals
      */
     public V put(K key, V value) {
         final Object k = maskNull(key);
@@ -393,63 +377,93 @@ public class IdentityHashMap<K,V>
         retryAfterResize: for (;;) {
             final Object[] tab = table;
             final int len = tab.length;
+
+            // 计算key映射到数组的索引
             int i = hash(k, len);
 
+            // 线性探测解决冲突
+            // 遍历数组，步长为2，直到找到与key引用相等的位置或一个空位置
             for (Object item; (item = tab[i]) != null;
                  i = nextKeyIndex(i, len)) {
+
+                // 若此位置不为null且与给定的key引用相等，则更新其值
+                // 引用不相等，则移动到后一个key，继续比较
                 if (item == k) {
                     @SuppressWarnings("unchecked")
                         V oldValue = (V) tab[i + 1];
+                    // 更新值
                     tab[i + 1] = value;
+                    // 返回旧值
                     return oldValue;
                 }
             }
 
+            // 执行到这里说明数组中没有与key引用相等的位置，执行插入操作
             final int s = size + 1;
-            // Use optimized form of 3 * s.
-            // Next capacity is len, 2 * current capacity.
+
+            // 如果插入后元素个数超过了容量的2/3（负载系数），则先执行扩容操作
             if (s + (s << 1) > len && resize(len))
+                // 扩容后需要重新计算key映射后的索引
                 continue retryAfterResize;
 
+            // 真正开始插入
             modCount++;
+
+            // 索引i处储存key，i为找到的空位置，可能不是key映射的位置
             tab[i] = k;
+            // 索引i+1处储存值
             tab[i + 1] = value;
+            // 更新元素个数
             size = s;
             return null;
         }
     }
 
     /**
-     * Resizes the table if necessary to hold given capacity.
-     *
-     * @param newCapacity the new capacity, must be a power of two.
-     * @return whether a resize did in fact take place
+     * 将容量扩大为给定的容量
+     * 给定容量必须为2的幂
+     * 若给定容量不大于旧容量，则不进行扩容
      */
     private boolean resize(int newCapacity) {
-        // assert (newCapacity & -newCapacity) == newCapacity; // power of 2
+        // 新数组长度为新容量的2倍
         int newLength = newCapacity * 2;
 
         Object[] oldTable = table;
         int oldLength = oldTable.length;
-        if (oldLength == 2 * MAXIMUM_CAPACITY) { // can't expand any further
+        // 如果旧容量（数组长度/2）已经等于最大容量，此时将无法扩容
+        if (oldLength == 2 * MAXIMUM_CAPACITY) {
+            // 如果元素个数到达了最大容量，抛出容量已耗尽异常
             if (size == MAXIMUM_CAPACITY - 1)
                 throw new IllegalStateException("Capacity exhausted.");
             return false;
         }
+
+        // 旧长度大于等于新长度，不进行扩容
         if (oldLength >= newLength)
             return false;
 
+        // 申请数组空间
         Object[] newTable = new Object[newLength];
 
+        // 遍历旧数组中的key
         for (int j = 0; j < oldLength; j += 2) {
             Object key = oldTable[j];
+            // 若此位置不为空
             if (key != null) {
                 Object value = oldTable[j+1];
+
+                // 解除引用
                 oldTable[j] = null;
                 oldTable[j+1] = null;
+
+                // 计算映射到新数组的索引
                 int i = hash(key, newLength);
+
+                // 线性探测解决冲突，找到一个空位置
                 while (newTable[i] != null)
                     i = nextKeyIndex(i, newLength);
+
+                // 插入键值
                 newTable[i] = key;
                 newTable[i + 1] = value;
             }
@@ -459,20 +473,20 @@ public class IdentityHashMap<K,V>
     }
 
     /**
-     * Copies all of the mappings from the specified map to this map.
-     * These mappings will replace any mappings that this map had for
-     * any of the keys currently in the specified map.
-     *
-     * @param m mappings to be stored in this map
-     * @throws NullPointerException if the specified map is null
+     * 将给定Map中的所有元素添加或更新到IdentityHashMap中
      */
     public void putAll(Map<? extends K, ? extends V> m) {
+
+        // 若给定的Map为空，则不执行任何操作
         int n = m.size();
         if (n == 0)
             return;
-        if (n > size)
-            resize(capacity(n)); // conservatively pre-expand
 
+        // 若给定Map大小超过size，则根据给定Map的大小做一次扩容操作
+        if (n > size)
+            resize(capacity(n));
+
+        // 遍历给定的Map，将其所有元素插入IdentityHashMap
         for (Entry<? extends K, ? extends V> e : m.entrySet())
             put(e.getKey(), e.getValue());
     }
@@ -487,25 +501,37 @@ public class IdentityHashMap<K,V>
      *         previously associated <tt>null</tt> with <tt>key</tt>.)
      */
     public V remove(Object key) {
+
+        // 计算key映射到数组的索引
         Object k = maskNull(key);
         Object[] tab = table;
         int len = tab.length;
         int i = hash(k, len);
 
+        // 线性探测
         while (true) {
             Object item = tab[i];
+
+            // 找到引用相同的位置，删除此处的键值对
             if (item == k) {
                 modCount++;
                 size--;
                 @SuppressWarnings("unchecked")
                     V oldValue = (V) tab[i + 1];
+
+                // 解除引用
                 tab[i + 1] = null;
                 tab[i] = null;
+
                 closeDeletion(i);
                 return oldValue;
             }
+
+            // key不存在
             if (item == null)
                 return null;
+
+            // 遍历下一个key
             i = nextKeyIndex(i, len);
         }
     }
@@ -543,21 +569,13 @@ public class IdentityHashMap<K,V>
     }
 
     /**
-     * Rehash all possibly-colliding entries following a
-     * deletion. This preserves the linear-probe
-     * collision properties required by get, put, etc.
-     *
-     * @param d the index of a newly empty deleted slot
+     * 删除一个键值对后，需要将后面映射相同的键值对向前移动，使之保持连续
      */
     private void closeDeletion(int d) {
-        // Adapted from Knuth Section 6.4 Algorithm R
         Object[] tab = table;
         int len = tab.length;
 
-        // Look for items to swap into newly vacated slot
-        // starting at index immediately following deletion,
-        // and continuing until a null slot is seen, indicating
-        // the end of a run of possibly-colliding keys.
+        // 遍历删除位置之后的键
         Object item;
         for (int i = nextKeyIndex(d, len); (item = tab[i]) != null;
              i = nextKeyIndex(i, len) ) {
@@ -579,14 +597,15 @@ public class IdentityHashMap<K,V>
     }
 
     /**
-     * Removes all of the mappings from this map.
-     * The map will be empty after this call returns.
+     * 清除所有元素
      */
     public void clear() {
         modCount++;
         Object[] tab = table;
+        // 遍历整个数组，将所有位置为null
         for (int i = 0; i < tab.length; i++)
             tab[i] = null;
+        // 元素个数置为0
         size = 0;
     }
 
@@ -1311,6 +1330,10 @@ public class IdentityHashMap<K,V>
         tab[i + 1] = value;
     }
 
+    /**
+     * 遍历所有元素
+     * @param action
+     */
     @SuppressWarnings("unchecked")
     @Override
     public void forEach(BiConsumer<? super K, ? super V> action) {
@@ -1318,18 +1341,26 @@ public class IdentityHashMap<K,V>
         int expectedModCount = modCount;
 
         Object[] t = table;
+
+        // 遍历数组中所有的key
         for (int index = 0; index < t.length; index += 2) {
             Object k = t[index];
+
+            // 若key不为null，则将此键值对传入action处理
             if (k != null) {
                 action.accept((K) unmaskNull(k), (V) t[index + 1]);
             }
 
+            // 快速失败检查
             if (modCount != expectedModCount) {
                 throw new ConcurrentModificationException();
             }
         }
     }
 
+    /**
+     * 遍历所有元素，使用给定的function计算新的值进行替换
+     */
     @SuppressWarnings("unchecked")
     @Override
     public void replaceAll(BiFunction<? super K, ? super V, ? extends V> function) {
@@ -1337,12 +1368,17 @@ public class IdentityHashMap<K,V>
         int expectedModCount = modCount;
 
         Object[] t = table;
+
+        // 遍历数组中所有的key
         for (int index = 0; index < t.length; index += 2) {
             Object k = t[index];
+
+            // 若key不为null，则将此键值对传入function处理，使用返回值更新value
             if (k != null) {
                 t[index + 1] = function.apply((K) unmaskNull(k), (V) t[index + 1]);
             }
 
+            // 快速失败检查
             if (modCount != expectedModCount) {
                 throw new ConcurrentModificationException();
             }
