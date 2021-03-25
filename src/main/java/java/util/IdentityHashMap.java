@@ -492,13 +492,7 @@ public class IdentityHashMap<K,V>
     }
 
     /**
-     * Removes the mapping for this key from this map if present.
-     *
-     * @param key key whose mapping is to be removed from the map
-     * @return the previous value associated with <tt>key</tt>, or
-     *         <tt>null</tt> if there was no mapping for <tt>key</tt>.
-     *         (A <tt>null</tt> return can also indicate that the map
-     *         previously associated <tt>null</tt> with <tt>key</tt>.)
+     * 删除指定键的键值对
      */
     public V remove(Object key) {
 
@@ -579,14 +573,26 @@ public class IdentityHashMap<K,V>
         Object item;
         for (int i = nextKeyIndex(d, len); (item = tab[i]) != null;
              i = nextKeyIndex(i, len) ) {
-            // The following test triggers if the item at slot i (which
-            // hashes to be at slot r) should take the spot vacated by d.
-            // If so, we swap it in, and then continue with d now at the
-            // newly vacated i.  This process will terminate when we hit
-            // the null slot at the end of this run.
-            // The test is messy because we are using a circular table.
+
+            // 因为数组是循环使用的，所以判断比较多
+            // (i < r && (r <= d || d <= i))
+            // i < r 说明此hash在数组尾和数组头部都有分布，此时i已经遍历到数组头部
+            // r <= d 说明被删除的索引d在数组尾，对应下面这种情况，r <= d <= len - 2
+            // --------------
+            // i         r d
+            //
+            // d <= i 说明被删除的索引d在数组头，对应下面这种情况，0 <= d <= i
+            // --------------
+            //   d i       r
+            //
+            // (r <= d && d <= i)说明此hash不存在跨越，对应下面这种情况，r <= d <= i
+            // --------------
+            //     r   d i
+            // 符合上述条件说明i位置的键与d是相同的映射，需要将索引i处的键值对移动到索引d处
             int r = hash(item, len);
             if ((i < r && (r <= d || d <= i)) || (r <= d && d <= i)) {
+
+                // 索引i处的键值移动到索引d处
                 tab[d] = item;
                 tab[d + 1] = tab[i + 1];
                 tab[i] = null;
