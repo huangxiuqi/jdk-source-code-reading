@@ -94,11 +94,13 @@ public class ArrayDeque<E> extends AbstractCollection<E>
 
     /**
      * 双端队列的头指针
+     * 总是指向位于队列头的元素
      */
     transient int head;
 
     /**
      * 双端队列的尾指针
+     * 总是指向队列尾的下一个待插入的位置
      */
     transient int tail;
 
@@ -235,7 +237,7 @@ public class ArrayDeque<E> extends AbstractCollection<E>
 
     /**
      * 队列头插入元素
-     * 先移动头指针在插入
+     * 先移动头指针再插入元素
      */
     public void addFirst(E e) {
         // 不能插入空元素
@@ -252,7 +254,7 @@ public class ArrayDeque<E> extends AbstractCollection<E>
 
     /**
      * 队列尾插入元素
-     * 先插入元素在移动尾指针
+     * 先插入元素再移动尾指针
      */
     public void addLast(E e) {
         // 不能插入空元素
@@ -311,33 +313,52 @@ public class ArrayDeque<E> extends AbstractCollection<E>
         return x;
     }
 
+    /**
+     * 移除队列头部元素
+     * 先弹出元素，再移动头指针，与插入时相反
+     */
     public E pollFirst() {
         int h = head;
         @SuppressWarnings("unchecked")
         E result = (E) elements[h];
-        // Element is null if deque empty
+
+        // 队列为空时返回null
         if (result == null)
             return null;
-        elements[h] = null;     // Must null out slot
+
+        // 将此位置置为null
+        elements[h] = null;
+
+        // 移动头指针
         head = (h + 1) & (elements.length - 1);
         return result;
     }
 
+    /**
+     * 移除队列尾部元素
+     * 先移动尾指针，再弹出元素，与插入时相反
+     */
     public E pollLast() {
+        // 移动尾指针
         int t = (tail - 1) & (elements.length - 1);
         @SuppressWarnings("unchecked")
         E result = (E) elements[t];
+
+        // 队列为空，返回null
         if (result == null)
             return null;
+
+        // 此位置置为null
         elements[t] = null;
         tail = t;
         return result;
     }
 
     /**
-     * @throws NoSuchElementException {@inheritDoc}
+     * 获取队列头元素
      */
     public E getFirst() {
+        // 因为头指针总是指向队列头元素，所以直接返回头指针处的元素
         @SuppressWarnings("unchecked")
         E result = (E) elements[head];
         if (result == null)
@@ -346,9 +367,10 @@ public class ArrayDeque<E> extends AbstractCollection<E>
     }
 
     /**
-     * @throws NoSuchElementException {@inheritDoc}
+     * 获取队列尾元素
      */
     public E getLast() {
+        // 因为尾指针总是指向队列尾元素的下一个待插入的位置，所以需要向左移动一位
         @SuppressWarnings("unchecked")
         E result = (E) elements[(tail - 1) & (elements.length - 1)];
         if (result == null)
@@ -368,25 +390,22 @@ public class ArrayDeque<E> extends AbstractCollection<E>
     }
 
     /**
-     * Removes the first occurrence of the specified element in this
-     * deque (when traversing the deque from head to tail).
-     * If the deque does not contain the element, it is unchanged.
-     * More formally, removes the first element {@code e} such that
-     * {@code o.equals(e)} (if such an element exists).
-     * Returns {@code true} if this deque contained the specified element
-     * (or equivalently, if this deque changed as a result of the call).
-     *
-     * @param o element to be removed from this deque, if present
-     * @return {@code true} if the deque contained the specified element
+     * 从头向尾查找给定的元素，如果存在，则将其删除
      */
     public boolean removeFirstOccurrence(Object o) {
         if (o == null)
             return false;
         int mask = elements.length - 1;
+
+        // 队列头索引
         int i = head;
         Object x;
+
+        // 从队列头向队列尾遍历
         while ( (x = elements[i]) != null) {
             if (o.equals(x)) {
+
+                // 删除之
                 delete(i);
                 return true;
             }
@@ -396,25 +415,22 @@ public class ArrayDeque<E> extends AbstractCollection<E>
     }
 
     /**
-     * Removes the last occurrence of the specified element in this
-     * deque (when traversing the deque from head to tail).
-     * If the deque does not contain the element, it is unchanged.
-     * More formally, removes the last element {@code e} such that
-     * {@code o.equals(e)} (if such an element exists).
-     * Returns {@code true} if this deque contained the specified element
-     * (or equivalently, if this deque changed as a result of the call).
-     *
-     * @param o element to be removed from this deque, if present
-     * @return {@code true} if the deque contained the specified element
+     * 从尾向头查找给定的元素，如果存在，则将其删除
      */
     public boolean removeLastOccurrence(Object o) {
         if (o == null)
             return false;
         int mask = elements.length - 1;
+
+        // 队列尾索引
         int i = (tail - 1) & mask;
         Object x;
+
+        // 从队列尾向队列头遍历
         while ( (x = elements[i]) != null) {
             if (o.equals(x)) {
+
+                // 删除之
                 delete(i);
                 return true;
             }
@@ -537,42 +553,60 @@ public class ArrayDeque<E> extends AbstractCollection<E>
         return removeFirst();
     }
 
+    /**
+     * 一些条件断言
+     */
     private void checkInvariants() {
+        // tail指针指向的位置必须永远是空位
         assert elements[tail] == null;
+
+        // head == tail 说明队列为空，则头指针head指向位置必须为null
+        // 否则头指针和尾指针的前一个位置不能为空
         assert head == tail ? elements[head] == null :
             (elements[head] != null &&
              elements[(tail - 1) & (elements.length - 1)] != null);
+
+        //
         assert elements[(head - 1) & (elements.length - 1)] == null;
     }
 
     /**
-     * Removes the element at the specified position in the elements array,
-     * adjusting head and tail as necessary.  This can result in motion of
-     * elements backwards or forwards in the array.
-     *
-     * <p>This method is called delete rather than remove to emphasize
-     * that its semantics differ from those of {@link List#remove(int)}.
-     *
-     * @return true if elements moved backwards
+     * 删除给定索引处的元素
      */
     private boolean delete(int i) {
+        // 运行时可能不会做检查，取决于虚拟机是否开启断言
         checkInvariants();
+
         final Object[] elements = this.elements;
         final int mask = elements.length - 1;
         final int h = head;
         final int t = tail;
+
+        // 从i处将数组分为前后两半部分
         final int front = (i - h) & mask;
         final int back  = (t - i) & mask;
 
-        // Invariant: head <= i < tail mod circularity
+        // i需要满足 head <= i < tail的条件
+        // 1.
+        // ----------------
+        // h    i      t
+        // 2.
+        // ----------------
+        //     t     h   i
+        // 3.
+        // ----------------
+        //  i  t     h
         if (front >= ((t - h) & mask))
             throw new ConcurrentModificationException();
 
-        // Optimize for least element motion
+        // 选择元素较少的一方进行移动
         if (front < back) {
             if (h <= i) {
+                // 对应上面图示的1、2两种情况
+                // 从队列头h到(i - h)处，所有元素向右移动一位
                 System.arraycopy(elements, h, elements, h + 1, front);
-            } else { // Wrap around
+            } else {
+                // 对应上面图示的情形3
                 System.arraycopy(elements, 0, elements, 1, i);
                 elements[0] = elements[mask];
                 System.arraycopy(elements, h, elements, h + 1, mask - h);
