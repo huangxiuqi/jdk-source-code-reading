@@ -89,6 +89,8 @@ public class ArrayDeque<E> extends AbstractCollection<E>
 {
     /**
      * 储存元素的数组，大小始终为2的幂
+     * 因为使用循环数组，头尾指针的计算可能需要取模运算，
+     * 数组长度定为2的幂就可以改为位运算，速度会快一点
      */
     transient Object[] elements;
 
@@ -112,15 +114,17 @@ public class ArrayDeque<E> extends AbstractCollection<E>
     // ******  Array allocation and resizing utilities ******
 
     /**
-     * 将传入参数格式化为大于等于参数的最小的2的幂，同时处理边界情况
+     * 将传入参数格式化为大于参数的最小的2的幂，同时处理边界情况
+     * 逻辑与HashMap中的基本类似，只不过本方法返回的值为大于numElements
      */
     private static int calculateSize(int numElements) {
 
         // 容量不能小于MIN_INITIAL_CAPACITY（8）
         int initialCapacity = MIN_INITIAL_CAPACITY;
 
-        // 将传入参数调整为大于等于numElements的最小的2的幂
+        // 将传入参数调整为大于numElements的最小的2的幂
         if (numElements >= initialCapacity) {
+            // 此处没有减一操作，所以最后计算的结果一定大于numElements
             initialCapacity = numElements;
             initialCapacity |= (initialCapacity >>>  1);
             initialCapacity |= (initialCapacity >>>  2);
@@ -566,7 +570,7 @@ public class ArrayDeque<E> extends AbstractCollection<E>
             (elements[head] != null &&
              elements[(tail - 1) & (elements.length - 1)] != null);
 
-        //
+        // 头指针前一个位置必须为null
         assert elements[(head - 1) & (elements.length - 1)] == null;
     }
 
@@ -586,13 +590,15 @@ public class ArrayDeque<E> extends AbstractCollection<E>
         final int front = (i - h) & mask;
         final int back  = (t - i) & mask;
 
-        // i需要满足 head <= i < tail的条件
+        // i需要满足 head <= i < tail的条件，分一下三种情况
         // 1.
         // ----------------
         // h    i      t
+        //
         // 2.
         // ----------------
         //     t     h   i
+        //
         // 3.
         // ----------------
         //  i  t     h
@@ -603,25 +609,40 @@ public class ArrayDeque<E> extends AbstractCollection<E>
         if (front < back) {
             if (h <= i) {
                 // 对应上面图示的1、2两种情况
-                // 从队列头h到(i - h)处，所有元素向右移动一位
+                // 从队列头h到(i - h)处，所有元素向后移动一位
                 System.arraycopy(elements, h, elements, h + 1, front);
             } else {
                 // 对应上面图示的情形3
+                // 先把从0到(i - 1)的元素向后移动一位，覆盖掉i处的元素，相当于删除了
                 System.arraycopy(elements, 0, elements, 1, i);
+                // 数组最后一个元素移动到索引0处
                 elements[0] = elements[mask];
+                // 最后把从h到(length - 2)处的元素都向后移动一位
                 System.arraycopy(elements, h, elements, h + 1, mask - h);
             }
+
+            // 原来头指针指向的位置已经空出来了，将其置为null
             elements[h] = null;
+
+            // 头指针向后移动一位
             head = (h + 1) & mask;
             return false;
         } else {
-            if (i < t) { // Copy the null tail as well
+            if (i < t) {
+                // 对应上面图示的1、3两种情况
+                // 从(i + 1)到(tail - 1)的元素向前移动一位
                 System.arraycopy(elements, i + 1, elements, i, back);
+                // 移动尾指针
                 tail = t - 1;
-            } else { // Wrap around
+            } else {
+                // 对应上面图示的情形2
+                // 先把从(i + 1)到(length - 1 - i)处的元素向前移动一位
                 System.arraycopy(elements, i + 1, elements, i, mask - i);
+                // 再把索引0处的元素移动到数组末尾
                 elements[mask] = elements[0];
+                // 最后把从1到tail处的元素向前移动一位
                 System.arraycopy(elements, 1, elements, 0, t);
+                // 移动尾指针
                 tail = (t - 1) & mask;
             }
             return true;
@@ -631,18 +652,28 @@ public class ArrayDeque<E> extends AbstractCollection<E>
     // *** Collection Methods ***
 
     /**
-     * Returns the number of elements in this deque.
-     *
-     * @return the number of elements in this deque
+     * 获取队列元素个数
      */
     public int size() {
+        // 当head <= tail时
+        // 0              15
+        // ----------------
+        //    h     t
+        // size = t - h   当(h <= t)时
+        //
+        // 当tail < head时
+        // 0              15
+        // ----------------
+        //    t        h
+        // size = (t - 0) + (15 - h + 1)
+        //      = t - h + 16       当(t < h)时
+        // (t - h + 16) % 16 = t - h
+        // size = (t - h) % length
         return (tail - head) & (elements.length - 1);
     }
 
     /**
-     * Returns {@code true} if this deque contains no elements.
-     *
-     * @return {@code true} if this deque contains no elements
+     * 头尾指针重合，队列为空
      */
     public boolean isEmpty() {
         return head == tail;
@@ -763,12 +794,7 @@ public class ArrayDeque<E> extends AbstractCollection<E>
     }
 
     /**
-     * Returns {@code true} if this deque contains the specified element.
-     * More formally, returns {@code true} if and only if this deque contains
-     * at least one element {@code e} such that {@code o.equals(e)}.
-     *
-     * @param o object to be checked for containment in this deque
-     * @return {@code true} if this deque contains the specified element
+     * 判断队列中是否包含给定元素
      */
     public boolean contains(Object o) {
         if (o == null)
@@ -776,9 +802,11 @@ public class ArrayDeque<E> extends AbstractCollection<E>
         int mask = elements.length - 1;
         int i = head;
         Object x;
+        // 从队列头向队列尾遍历
         while ( (x = elements[i]) != null) {
             if (o.equals(x))
                 return true;
+            // 移动指针
             i = (i + 1) & mask;
         }
         return false;
@@ -802,16 +830,20 @@ public class ArrayDeque<E> extends AbstractCollection<E>
     }
 
     /**
-     * Removes all of the elements from this deque.
-     * The deque will be empty after this call returns.
+     * 清空队列
      */
     public void clear() {
+
+        // 缓存头尾节点
         int h = head;
         int t = tail;
-        if (h != t) { // clear all cells
+        // 队列不为空
+        if (h != t) {
             head = tail = 0;
             int i = h;
             int mask = elements.length - 1;
+
+            // 从队列头向队列尾遍历，清空所有元素
             do {
                 elements[i] = null;
                 i = (i + 1) & mask;
