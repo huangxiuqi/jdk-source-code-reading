@@ -92,14 +92,11 @@ public class PriorityQueue<E> extends AbstractQueue<E>
     private static final int DEFAULT_INITIAL_CAPACITY = 11;
 
     /**
-     * Priority queue represented as a balanced binary heap: the two
-     * children of queue[n] are queue[2*n+1] and queue[2*(n+1)].  The
-     * priority queue is ordered by comparator, or by the elements'
-     * natural ordering, if comparator is null: For each node n in the
-     * heap and each descendant d of n, n <= d.  The element with the
-     * lowest value is in queue[0], assuming the queue is nonempty.
+     * 二叉堆存放元素的数组，若queue[n]为父节点，则其两个子节点为queue[2 * (n + 1)]和queue[2 * (n + 2)]，
+     * 若queue[n]为子节点，则其父节点为queue[(n - 1) / 2]
+     * 索引为0处称为堆顶
      */
-    transient Object[] queue; // non-private to simplify nested class access
+    transient Object[] queue;
 
     /**
      * 元素个数
@@ -313,55 +310,60 @@ public class PriorityQueue<E> extends AbstractQueue<E>
 
         size = i + 1;
 
-        // 如果是第一个插入的元素，直接放在数组开头
         if (i == 0)
+            // 如果是第一个插入的元素，直接放在数组开头
             queue[0] = e;
         else
+            // 上浮到正确位置
             siftUp(i, e);
         return true;
     }
 
+    /**
+     * 若队列不为空，则返回堆顶（索引为0的元素）元素
+     * @return
+     */
     @SuppressWarnings("unchecked")
     public E peek() {
         return (size == 0) ? null : (E) queue[0];
     }
 
+    /**
+     * 查找给定元素的索引，若元素不存在则返回-1
+     */
     private int indexOf(Object o) {
         if (o != null) {
+            // 遍历元素，返回第一个equals的元素的索引
             for (int i = 0; i < size; i++)
                 if (o.equals(queue[i]))
                     return i;
         }
+
+        // 找不到返回-1
         return -1;
     }
 
     /**
-     * Removes a single instance of the specified element from this queue,
-     * if it is present.  More formally, removes an element {@code e} such
-     * that {@code o.equals(e)}, if this queue contains one or more such
-     * elements.  Returns {@code true} if and only if this queue contained
-     * the specified element (or equivalently, if this queue changed as a
-     * result of the call).
-     *
-     * @param o element to be removed from this queue, if present
-     * @return {@code true} if this queue changed as a result of the call
+     * 删除给定的元素
+     * 使用equals比较
      */
     public boolean remove(Object o) {
+        // 查找给定元素的索引
         int i = indexOf(o);
+
         if (i == -1)
+            // 给定元素不存在
             return false;
         else {
+            // 删除
             removeAt(i);
             return true;
         }
     }
 
     /**
-     * Version of remove using reference equality, not equals.
-     * Needed by iterator.remove.
-     *
-     * @param o element to be removed from this queue, if present
-     * @return {@code true} if removed
+     * 删除给定的元素
+     * 使用==比较
      */
     boolean removeEq(Object o) {
         for (int i = 0; i < size; i++) {
@@ -374,12 +376,7 @@ public class PriorityQueue<E> extends AbstractQueue<E>
     }
 
     /**
-     * Returns {@code true} if this queue contains the specified element.
-     * More formally, returns {@code true} if and only if this queue contains
-     * at least one element {@code e} such that {@code o.equals(e)}.
-     *
-     * @param o object to be checked for containment in this queue
-     * @return {@code true} if this queue contains the specified element
+     * 判断队列中是否包含给定元素
      */
     public boolean contains(Object o) {
         return indexOf(o) != -1;
@@ -548,13 +545,17 @@ public class PriorityQueue<E> extends AbstractQueue<E>
     }
 
     /**
-     * Removes all of the elements from this priority queue.
-     * The queue will be empty after this call returns.
+     * 清空队列
      */
     public void clear() {
+        // 修改次数加一
         modCount++;
+
+        // 将数组所有位置置为null
         for (int i = 0; i < size; i++)
             queue[i] = null;
+
+        // 元素个数置为0
         size = 0;
     }
 
@@ -573,10 +574,14 @@ public class PriorityQueue<E> extends AbstractQueue<E>
         // 修改次数加一
         modCount++;
 
+        // 堆顶元素
         E result = (E) queue[0];
+
+        // 堆底元素
         E x = (E) queue[s];
         queue[s] = null;
         if (s != 0)
+            // 将堆底元素放至堆顶，然后下沉到正确位置
             siftDown(0, x);
         return result;
     }
@@ -614,16 +619,7 @@ public class PriorityQueue<E> extends AbstractQueue<E>
     }
 
     /**
-     * Inserts item x at position k, maintaining heap invariant by
-     * promoting x up the tree until it is greater than or equal to
-     * its parent, or is the root.
-     *
-     * To simplify and speed up coercions and comparisons. the
-     * Comparable and Comparator versions are separated into different
-     * methods that are otherwise identical. (Similarly for siftDown.)
-     *
-     * @param k the position to fill
-     * @param x the item to insert
+     * 在索引k处插入元素，并上浮到正确的位置
      */
     private void siftUp(int k, E x) {
         if (comparator != null)
@@ -632,30 +628,58 @@ public class PriorityQueue<E> extends AbstractQueue<E>
             siftUpComparable(k, x);
     }
 
+    /**
+     * 使用元素自然序上浮
+     */
     @SuppressWarnings("unchecked")
     private void siftUpComparable(int k, E x) {
         Comparable<? super E> key = (Comparable<? super E>) x;
+
+        // 节点交换到堆顶则停止上浮
         while (k > 0) {
+
+            // 获取父节点
             int parent = (k - 1) >>> 1;
             Object e = queue[parent];
+
+            // 若当前位置满足二叉堆性质，跳出循环
+            // 否则交换两节点的值，准备下一次比较
             if (key.compareTo((E) e) >= 0)
                 break;
+
+            // 位置不正确，交换父子节点
             queue[k] = e;
             k = parent;
         }
+
+        // 在合适的位置插入新元素
         queue[k] = key;
     }
 
+    /**
+     * 使用给定的比较器上浮
+     */
     @SuppressWarnings("unchecked")
     private void siftUpUsingComparator(int k, E x) {
+
+        // 节点交换到堆顶则停止上浮
         while (k > 0) {
+
+            // 获取父节点
             int parent = (k - 1) >>> 1;
             Object e = queue[parent];
+
+            // 若当前位置满足二叉堆性质，跳出循环
+            // 否则，交换父子节点，进行下一次比较
             if (comparator.compare(x, (E) e) >= 0)
                 break;
+
+            // 交换父子节点
             queue[k] = e;
             k = parent;
         }
+
+        // 在合适的位置插入新元素
         queue[k] = x;
     }
 
