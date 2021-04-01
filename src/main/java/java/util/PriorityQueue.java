@@ -294,6 +294,16 @@ public class PriorityQueue<E> extends AbstractQueue<E>
 
     /**
      * 插入元素
+     * 以最小堆为例，插入流程如下
+     * 1.将元素放在[size - 1]处，即最后一个元素，此时索引记做k
+     * 2.找到k的父节点，父节点索引parent为(k - 1) / 2
+     * 3.比较queue[k]与queue[parent]的大小，若queue[k] >= queue[parent]，
+     *   满足父节点小于等于子节点的条件，则k是正确的位置，插入完成。
+     * 4.若queue[k] < queue[parent]，不满足父节点小于等于子节点的条件，交换这两个节点，
+     *   然后令k = parent，之后回到第2步重复。
+     *
+     * 简单来说就是将元素插入二叉堆的末尾，然后与父节点比较，若子节点小于父节点，交换这两个父子节点，
+     * 再与父节点比较大小，直到找到一个满足子节点大于等于父节点的位置，插入完成
      */
     public boolean offer(E e) {
         // 插入元素不能为空
@@ -364,6 +374,7 @@ public class PriorityQueue<E> extends AbstractQueue<E>
     /**
      * 删除给定的元素
      * 使用==比较
+     * 迭代器中移除forgetMeNot队列中的元素时使用
      */
     boolean removeEq(Object o) {
         for (int i = 0; i < size; i++) {
@@ -587,30 +598,32 @@ public class PriorityQueue<E> extends AbstractQueue<E>
     }
 
     /**
-     * Removes the ith element from queue.
-     *
-     * Normally this method leaves the elements at up to i-1,
-     * inclusive, untouched.  Under these circumstances, it returns
-     * null.  Occasionally, in order to maintain the heap invariant,
-     * it must swap a later element of the list with one earlier than
-     * i.  Under these circumstances, this method returns the element
-     * that was previously at the end of the list and is now at some
-     * position before i. This fact is used by iterator.remove so as to
-     * avoid missing traversing elements.
+     * 删除给定索引处的元素，删除后可能会留下一个空位，
+     * 会将最后一个元素替换到删除位置，经过下沉和上浮（可能）操作后，使树重新平衡
      */
     @SuppressWarnings("unchecked")
     private E removeAt(int i) {
-        // assert i >= 0 && i < size;
+        // 修改次数加一
         modCount++;
+
+        // 元素个数减一
         int s = --size;
-        if (s == i) // removed last element
+        if (s == i)
+            // 删除的最后一个元素，则直接将索引i处置为null即可
             queue[i] = null;
         else {
+            // 将队列最后一个元素插入i处，并下沉到正确的位置
             E moved = (E) queue[s];
             queue[s] = null;
             siftDown(i, moved);
+
+            // 如果此元素没有下沉，则将其上浮
             if (queue[i] == moved) {
                 siftUp(i, moved);
+
+                // 如果元素上浮移动过位置，那么返回这个元素
+                // 返回值是在迭代器中使用，因为元素上浮后可能已经错过迭代器的迭代指针，
+                // 需要在另外的队列中保存，待指针遍历完数组后，再对这个队列中的值进行遍历
                 if (queue[i] != moved)
                     return moved;
             }
@@ -629,7 +642,7 @@ public class PriorityQueue<E> extends AbstractQueue<E>
     }
 
     /**
-     * 使用元素自然序上浮
+     * 使用元素自然序
      */
     @SuppressWarnings("unchecked")
     private void siftUpComparable(int k, E x) {
@@ -652,44 +665,29 @@ public class PriorityQueue<E> extends AbstractQueue<E>
             k = parent;
         }
 
-        // 在合适的位置插入新元素
+        // 在正确的位置插入新元素
         queue[k] = key;
     }
 
     /**
-     * 使用给定的比较器上浮
+     * 使用给定的比较器
+     * 逻辑与siftUpComparable相同，只是更换了比较器
      */
     @SuppressWarnings("unchecked")
     private void siftUpUsingComparator(int k, E x) {
-
-        // 节点交换到堆顶则停止上浮
         while (k > 0) {
-
-            // 获取父节点
             int parent = (k - 1) >>> 1;
             Object e = queue[parent];
-
-            // 若当前位置满足二叉堆性质，跳出循环
-            // 否则，交换父子节点，进行下一次比较
             if (comparator.compare(x, (E) e) >= 0)
                 break;
-
-            // 交换父子节点
             queue[k] = e;
             k = parent;
         }
-
-        // 在合适的位置插入新元素
         queue[k] = x;
     }
 
     /**
-     * Inserts item x at position k, maintaining heap invariant by
-     * demoting x down the tree repeatedly until it is less than or
-     * equal to its children or is a leaf.
-     *
-     * @param k the position to fill
-     * @param x the item to insert
+     * 在索引k处插入元素，并下沉到正确的位置
      */
     private void siftDown(int k, E x) {
         if (comparator != null)
@@ -698,25 +696,48 @@ public class PriorityQueue<E> extends AbstractQueue<E>
             siftDownComparable(k, x);
     }
 
+    /**
+     * 使用元素自然序
+     */
     @SuppressWarnings("unchecked")
     private void siftDownComparable(int k, E x) {
         Comparable<? super E> key = (Comparable<? super E>)x;
-        int half = size >>> 1;        // loop while a non-leaf
+
+        // 处理到最后一个非叶子节点，叶子节点不需要比较了
+        int half = size >>> 1;
         while (k < half) {
-            int child = (k << 1) + 1; // assume left child is least
+            // 左孩子索引为2k + 1
+            int child = (k << 1) + 1;
+            // 左孩子赋给变量c
             Object c = queue[child];
+
+            // 右孩子索引为2k + 2
             int right = child + 1;
+
+            // 如果右孩子存在且左孩子大于右孩子
+            // 则将c赋值为右孩子
             if (right < size &&
                 ((Comparable<? super E>) c).compareTo((E) queue[right]) > 0)
                 c = queue[child = right];
+
+            // 此时，变量c为左右孩子中最小的那个
+            // 若给定节点小于等于c，则说明已经下沉到正确的位置，停止循环
             if (key.compareTo((E) c) <= 0)
                 break;
+
+            // 节点比左右孩子中最小的那个还大，则交换父子节点，继续下次比较
             queue[k] = c;
             k = child;
         }
+
+        // 在正确的位置插入给定元素
         queue[k] = key;
     }
 
+    /**
+     * 使用给定的比较器
+     * 逻辑与siftDownComparable方法相同，只是更换了比较器
+     */
     @SuppressWarnings("unchecked")
     private void siftDownUsingComparator(int k, E x) {
         int half = size >>> 1;
@@ -736,11 +757,12 @@ public class PriorityQueue<E> extends AbstractQueue<E>
     }
 
     /**
-     * Establishes the heap invariant (described above) in the entire tree,
-     * assuming nothing about the order of the elements prior to the call.
+     * 将无序数组调整为二叉堆
+     * 从最后一个非叶子节点开始向根节点遍历，将每个节点下沉到正确的位置
      */
     @SuppressWarnings("unchecked")
     private void heapify() {
+        // (size / 2) - 1 是最后一个非叶子节点的索引
         for (int i = (size >>> 1) - 1; i >= 0; i--)
             siftDown(i, (E) queue[i]);
     }
