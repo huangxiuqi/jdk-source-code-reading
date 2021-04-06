@@ -2385,20 +2385,39 @@ public class TreeMap<K,V>
         modCount++;
         size--;
 
-        // If strictly internal, copy successor's element to p and then make p
-        // point to successor.
+        // 被删除节点有两个孩子，则与下一个中序遍历节点替换，有以下几种情况
+        // 1.
+        //         4(p)               5
+        //        / \                / \
+        //       2   6      替换后  2     6
+        //      / \  / \          / \   / \
+        //     1  3  5  7        1  3 4(p) 7
+        //
+        // 2.
+        //         4(p)                5
+        //        / \                 / \
+        //       2   5      替换后    2   4(p)
+        //      / \   \             / \   \
+        //     1  3    6           1  3    6(r)
+        //
+        // 3.
+        //         4(p)             4(p)
+        //        /       替换后    /
+        //       2                2(r)
         if (p.left != null && p.right != null) {
             Entry<K,V> s = successor(p);
             p.key = s.key;
             p.value = s.value;
             p = s;
-        } // p has 2 children
+        }
 
-        // Start fixup at replacement node, if it exists.
+        // 如果左孩子存在，则使用左孩子替换p后删除p，如上面的情形3
+        // 如果左孩子不存在而右孩子存在，则使用右孩子替换p后删除p，如上面的情形2
+        // 左右孩子都不存在，不需要替换，直接删掉p，如上面的情形1
         Entry<K,V> replacement = (p.left != null ? p.left : p.right);
 
         if (replacement != null) {
-            // Link replacement to parent
+            // 存在左孩子或右孩子，替换掉p后将p删除
             replacement.parent = p.parent;
             if (p.parent == null)
                 root = replacement;
@@ -2407,15 +2426,18 @@ public class TreeMap<K,V>
             else
                 p.parent.right = replacement;
 
-            // Null out links so they are OK to use by fixAfterDeletion.
             p.left = p.right = p.parent = null;
 
-            // Fix replacement
+            // 被删除节点是黑色，删除后可能不满足红黑树性质，需要使其重新平衡
             if (p.color == BLACK)
                 fixAfterDeletion(replacement);
-        } else if (p.parent == null) { // return if we are the only node.
+        } else if (p.parent == null) {
+            // p是根节点，则直接将树的根节点指针置空
             root = null;
-        } else { //  No children. Use self as phantom replacement and unlink.
+        } else {
+            // 被删除节点不存在子节点，直接删除
+
+            // 若节点为黑色，删除后可能不满足红黑树性质，需要使其重新平衡
             if (p.color == BLACK)
                 fixAfterDeletion(p);
 
@@ -2435,6 +2457,9 @@ public class TreeMap<K,V>
     private void fixAfterDeletion(Entry<K,V> x) {
         while (x != root && colorOf(x) == BLACK) {
             if (x == leftOf(parentOf(x))) {
+                //
+
+
                 Entry<K,V> sib = rightOf(parentOf(x));
 
                 if (colorOf(sib) == RED) {
@@ -2461,7 +2486,7 @@ public class TreeMap<K,V>
                     rotateLeft(parentOf(x));
                     x = root;
                 }
-            } else { // symmetric
+            } else {
                 Entry<K,V> sib = leftOf(parentOf(x));
 
                 if (colorOf(sib) == RED) {
