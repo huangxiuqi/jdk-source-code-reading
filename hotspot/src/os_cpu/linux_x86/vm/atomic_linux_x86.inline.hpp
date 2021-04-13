@@ -91,7 +91,11 @@ inline void*    Atomic::xchg_ptr(void*    exchange_value, volatile void*     des
 
 
 inline jint     Atomic::cmpxchg    (jint     exchange_value, volatile jint*     dest, jint     compare_value) {
+
+  // 检测CPU是否多核，多核会返回1，单核返回0
   int mp = os::is_MP();
+
+  // 内联汇编，通过cmpxchgl指令执行CAS操作
   __asm__ volatile (LOCK_IF_MP(%4) "cmpxchgl %1,(%3)"
                     : "=a" (exchange_value)
                     : "r" (exchange_value), "a" (compare_value), "r" (dest), "r" (mp)

@@ -162,10 +162,7 @@ public class AtomicInteger extends Number implements java.io.Serializable {
     }
 
     /**
-     * Atomically adds the given value to the current value.
      *
-     * @param delta the value to add
-     * @return the previous value
      */
     public final int getAndAdd(int delta) {
         return unsafe.getAndAddInt(this, valueOffset, delta);

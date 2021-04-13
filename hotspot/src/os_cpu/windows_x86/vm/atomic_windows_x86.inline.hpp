@@ -214,8 +214,13 @@ inline void*    Atomic::xchg_ptr(void*    exchange_value, volatile void*     des
 }
 
 inline jint     Atomic::cmpxchg    (jint     exchange_value, volatile jint*     dest, jint     compare_value) {
-  // alternative for InterlockedCompareExchange
+
+  // 检测CPU是否多核，多核会返回1，单核返回0
   int mp = os::is_MP();
+
+  // 内联汇编，通过cmpxchg指令执行CAS操作
+  // 如果是多核处理器，会在cmpxchg前加上lock前缀
+  // cmpxchg dword ptr [edx], ecx 含义为若eax的值于edx指向的内存处的值相等，则使用ecx的值替换edx指向的内存处的值
   __asm {
     mov edx, dest
     mov ecx, exchange_value

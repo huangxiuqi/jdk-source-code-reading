@@ -951,6 +951,7 @@ public final class Unsafe {
     /**
      * 如果一个Java变量当前与expected相等，将其原子更新为x
      * 成功返回true
+     * 对应的C++实现位于hotspot/src/share/vm/prims/unsafe.cpp#1213处的Unsafe_CompareAndSwapInt方法
      */
     public final native boolean compareAndSwapInt(Object o, long offset,
                                                   int expected,
@@ -977,7 +978,9 @@ public final class Unsafe {
      */
     public native void    putObjectVolatile(Object o, long offset, Object x);
 
-    /** Volatile version of {@link #getInt(Object, long)}  */
+    /**
+     * 通过对象和成员变量的偏移量直接获取成员变量的值，同时确保内存可见性
+     */
     public native int     getIntVolatile(Object o, long offset);
 
     /** Volatile version of {@link #putInt(Object, long, int)}  */
@@ -1088,15 +1091,7 @@ public final class Unsafe {
     // platforms not supporting native instructions
 
     /**
-     * Atomically adds the given value to the current value of a field
-     * or array element within the given object <code>o</code>
-     * at the given <code>offset</code>.
-     *
-     * @param o object/array to update the field/element in
-     * @param offset field/element offset
-     * @param delta the value to add
-     * @return the previous value
-     * @since 1.8
+     * 原子地对指定偏移处的变量加上一个整数delta
      */
     public final int getAndAddInt(Object o, long offset, int delta) {
         int v;
