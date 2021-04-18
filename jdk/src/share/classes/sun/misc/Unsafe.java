@@ -722,21 +722,7 @@ public final class Unsafe {
     public native long staticFieldOffset(Field f);
 
     /**
-     * Report the location of a given static field, in conjunction with {@link
-     * #staticFieldBase}.
-     * <p>Do not expect to perform any sort of arithmetic on this offset;
-     * it is just a cookie which is passed to the unsafe heap memory accessors.
-     *
-     * <p>Any given field will always have the same offset, and no two distinct
-     * fields of the same class will ever have the same offset.
-     *
-     * <p>As of 1.4.1, offsets for fields are represented as long values,
-     * although the Sun JVM does not use the most significant 32 bits.
-     * It is hard to imagine a JVM technology which needs more than
-     * a few bits to encode an offset within a non-array object,
-     * However, for consistency with other methods in this class,
-     * this method reports its result as a long value.
-     * @see #getInt(Object, long)
+     * 获取给定字段在对象中的偏移
      */
     public native long objectFieldOffset(Field f);
 
@@ -1096,8 +1082,13 @@ public final class Unsafe {
     public final int getAndAddInt(Object o, long offset, int delta) {
         int v;
         do {
+            // 先获取旧值v
             v = getIntVolatile(o, offset);
+            // 若值没有改变，则更新为v + delta
+            // 否则获取新的值，再进行比较
+            // 典型的CAS操作，不断重试，直到更新成功
         } while (!compareAndSwapInt(o, offset, v, v + delta));
+        // 返回相加之前的值
         return v;
     }
 
