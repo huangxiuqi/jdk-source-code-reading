@@ -1203,6 +1203,7 @@ UNSAFE_ENTRY(jboolean, Unsafe_CompareAndSwapObject(JNIEnv *env, jobject unsafe, 
   oop e = JNIHandles::resolve(e_h);
   oop p = JNIHandles::resolve(obj);
   HeapWord* addr = (HeapWord *)index_oop_from_field_offset_long(p, offset);
+  // 调用位于hotspot/src/share/vm/oops/oop.inline.hpp#565处的oopDesc::atomic_compare_exchange_oop方法
   oop res = oopDesc::atomic_compare_exchange_oop(x, addr, e, true);
   jboolean success  = (res == e);
   if (success)
@@ -1216,7 +1217,7 @@ UNSAFE_ENTRY(jboolean, Unsafe_CompareAndSwapInt(JNIEnv *env, jobject unsafe, job
   jint* addr = (jint *) index_oop_from_field_offset_long(p, offset);
 
   // 前面都是一些准备工作，重要的是这一句，实际的CAS操作
-  // 调用位于hotspot/src/share/vm/runtime/atomic.cpp#70处的unsigned Atomic::cmpxchg方法
+  // 调用位于hotspot/src/share/vm/runtime/atomic.cpp#70处的Atomic::cmpxchg方法
   // 此方法会返回变量旧的值，若旧的值与期望值相等，则返回成功
   return (jint)(Atomic::cmpxchg(x, addr, e)) == e;
 UNSAFE_END

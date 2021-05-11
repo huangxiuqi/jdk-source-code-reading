@@ -926,16 +926,16 @@ public final class Unsafe {
 
 
     /**
-     * Atomically update Java variable to <tt>x</tt> if it is currently
-     * holding <tt>expected</tt>.
-     * @return <tt>true</tt> if successful
+     * 如果一个Java对象引用当前与expected相等，将其原子更新为x
+     * 成功返回true
+     * 对应的C++实现位于hotspot/src/share/vm/prims/unsafe.cpp#1200处的Unsafe_CompareAndSwapObject方法
      */
     public final native boolean compareAndSwapObject(Object o, long offset,
                                                      Object expected,
                                                      Object x);
 
     /**
-     * 如果一个Java变量当前与expected相等，将其原子更新为x
+     * 如果一个Java Integer变量当前与expected相等，将其原子更新为x
      * 成功返回true
      * 对应的C++实现位于hotspot/src/share/vm/prims/unsafe.cpp#1213处的Unsafe_CompareAndSwapInt方法
      */
